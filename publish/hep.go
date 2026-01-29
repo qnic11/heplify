@@ -3,6 +3,7 @@ package publish
 import (
 	"bufio"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"os"
@@ -41,6 +42,65 @@ func writeAndFlush(client *HEPConn, data []byte, action string) (int, error) {
 	}
 
 	return hl, nil
+}
+
+func parseTLSMinVersion(version string) (uint16, error) {
+	switch strings.TrimSpace(version) {
+	case "":
+		return 0, nil
+	case "1.0":
+		return tls.VersionTLS10, nil
+	case "1.1":
+		return tls.VersionTLS11, nil
+	case "1.2":
+		return tls.VersionTLS12, nil
+	case "1.3":
+		return tls.VersionTLS13, nil
+	default:
+		return 0, fmt.Errorf("unsupported tls min version: %s", version)
+	}
+}
+
+func buildTLSConfig() (*tls.Config, error) {
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: config.Cfg.SkipVerify,
+	}
+
+	minVersion, err := parseTLSMinVersion(config.Cfg.TLSMinVersion)
+	if err != nil {
+		return nil, err
+	}
+	if minVersion != 0 {
+		tlsConfig.MinVersion = minVersion
+	}
+
+	if config.Cfg.TLSCertFile != "" || config.Cfg.TLSKeyFile != "" {
+		if config.Cfg.TLSCertFile == "" || config.Cfg.TLSKeyFile == "" {
+			return nil, fmt.Errorf("both tls-cert-file and tls-key-file must be set for mutual TLS")
+		}
+		cert, err := tls.LoadX509KeyPair(config.Cfg.TLSCertFile, config.Cfg.TLSKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("load tls key pair: %w", err)
+		}
+		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+
+	if config.Cfg.TLSClientCAFile != "" {
+		caPEM, err := os.ReadFile(config.Cfg.TLSClientCAFile)
+		if err != nil {
+			return nil, fmt.Errorf("read tls client ca file: %w", err)
+		}
+		certPool, err := x509.SystemCertPool()
+		if err != nil {
+			certPool = x509.NewCertPool()
+		}
+		if !certPool.AppendCertsFromPEM(caPEM) {
+			return nil, fmt.Errorf("failed to parse tls client ca file: %s", config.Cfg.TLSClientCAFile)
+		}
+		tlsConfig.RootCAs = certPool
+	}
+
+	return tlsConfig, nil
 }
 
 func NewHEPOutputer(serverAddr string) (*HEPOutputer, error) {
@@ -116,7 +176,12 @@ func (h *HEPOutputer) ConnectServer(n int) (err error) {
 			return err
 		}
 	} else if config.Cfg.Network == "tls" {
-		if h.client[n].conn, err = tls.Dial("tcp", h.addr[n], &tls.Config{InsecureSkipVerify: config.Cfg.SkipVerify}); err != nil {
+		tlsConfig, err := buildTLSConfig()
+		if err != nil {
+			promstats.ConnectionStatus.Set(0)
+			return err
+		}
+		if h.client[n].conn, err = tls.Dial("tcp", h.addr[n], tlsConfig); err != nil {
 			promstats.ConnectionStatus.Set(0)
 			return err
 		}
