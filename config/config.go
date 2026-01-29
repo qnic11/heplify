@@ -39,6 +39,10 @@ type Config struct {
 	ScriptFile         string
 	ScriptHEPFilter    []int
 	SkipVerify         bool
+	TLSCertFile        string
+	TLSKeyFile         string
+	TLSClientCAFile    string
+	TLSMinVersion      string
 	HEPBufferDebug     bool
 	HEPBufferEnable    bool
 	HEPBufferSize      string

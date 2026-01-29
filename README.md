@@ -186,6 +186,14 @@ You can use the image using docker compose:
         If true, sipassembly will be enabled
   -skipverify
         skip certifcate validation
+  -tls-cert-file string
+        client TLS certificate file path
+  -tls-client-ca-file string
+        TLS CA bundle for verifying server certificates
+  -tls-key-file string
+        client TLS key file path
+  -tls-min-version string
+        minimum TLS version to use [1.0, 1.1, 1.2, 1.3] (default "1.2")
   -sl
 	Log to syslog
   -t string
@@ -217,6 +225,9 @@ You can use the image using docker compose:
 
 # Capture SIP and RTCP packets on any interface and send them via TLS to 192.168.1.1:9060
 ./heplify -hs 192.168.1.1:9060 -nt tls
+
+# Capture SIP and RTCP packets on any interface and send them via mutual TLS to 192.168.1.1:9060
+./heplify -hs 192.168.1.1:9060 -nt tls -tls-cert-file client.crt -tls-key-file client.key -tls-client-ca-file ca.pem
 
 # Capture SIP and RTCP packets on any interface and send them to 192.168.1.1:9060. Use a someNodeName
 ./heplify -hs 192.168.1.1:9060 -hn someNodeName
